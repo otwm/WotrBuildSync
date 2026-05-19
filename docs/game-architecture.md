@@ -122,6 +122,86 @@ SelectClass(신화클래스) → SelectFeature(×N)
 
 ---
 
+## m_LevelPlans (주의: 비어 있을 수 있음)
+
+`UnitProgressionData.m_LevelPlans`는 레벨업 기록을 저장하지만, 캐릭터 생성 방식에 따라 비어 있다.
+
+- **비어 있는 케이스**: 레벨 플랜 시스템 도입 전 생성된 캐릭터, 또는 프리셋/모드로 생성된 캐릭터
+- **대안**: `prog.ClassesOrder` + `prog.Selections` + `prog.Race` + `unit.Descriptor.Stats` 조합으로 현재 빌드 상태를 재구성
+
+현재 GameExporter는 이 대안 방식을 사용한다.
+
+---
+
+## AttributeIncrease (레벨 4/8/12/16/20 능력치 증가)
+
+실제 게임 데이터 탐색 결과:
+
+| 위치 | 존재 여부 | 비고 |
+|------|-----------|------|
+| `prog.Selections` | **없음** | diagnostics.log 확인, lv=4/8/12 항목 없음 |
+| `unit.Descriptor.Facts` (StatType param) | **없음** | Stat-param Features 섹션 비어 있음 |
+| `FeatProgressionVM.m_FeatureEntries` | **있음** | lv=4,8,12,16,20 항목 확인 |
+
+`FeatProgressionVM.m_FeatureEntries`의 `ProgressionVM+FeatureEntry`를 통해 접근:
+- `entry.Level` → 4, 8, 12, 16, 20
+- `entry.Feature` → `BlueprintFeatureBase` (블루프린트 직접 참조, `name` 소문자 필드로 이름 획득)
+- 해당 블루프린트가 Selection 타입이면 `prog.Selections[bp][level]`에서 선택된 스탯 추출 가능
+
+---
+
+## UI MVVM 레이어 (Character Info)
+
+네임스페이스: `Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo`
+
+### 계층 구조
+
+```
+UnitProgressionVM
+├── ClassProgressionVM[]         (각 클래스별)
+│   └── ProgressionVM[]          (각 BlueprintProgression별, AddAdditionalProgressions 포함)
+│       ├── m_Determinators      : List<FeatureEntry>
+│       ├── m_ProgressionLines   : Dictionary<int, Dictionary<int, FeatureEntry>>
+│       ├── MainChupaChupsList   : List<FeatureProgressionChupaChupsVM>
+│       ├── MainChupaChupsLines  : List<List<FeatureProgressionChupaChupsVM>>
+│       ├── AdditionalChupaChupsList : List<FeatureProgressionChupaChupsVM>
+│       ├── ProgressionSourceFeatures : Dictionary<FeatureEntry, UIFeature>
+│       ├── BlueprintProgression
+│       ├── ProgressionData      : Kingmaker.UnitLogic.ProgressionData
+│       ├── Unit                 : UnitDescriptor
+│       └── LevelProgressionVM
+└── FeatProgressionVM            (피트 전용, BaseProgressionVM<FeatureProgressionChupaChupsVM> 상속)
+    └── m_FeatureEntries         : List<FeatureEntry>
+```
+
+### ProgressionVM+FeatureEntry 구조
+
+인게임 실측 결과 (`Assembly-CSharp.dll` 리플렉션):
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `Feature` | `BlueprintFeatureBase` | 블루프린트 직접 참조 (Unity `name` 소문자 필드로 이름 접근) |
+| `Level` | `int` | 이 피처를 얻는 레벨 |
+| `Index` | `int` | 같은 레벨 내 순서 |
+| `IsConnected` | `bool` | UI 연결선 표시용 |
+| `Rank` | `int` | |
+| `DifType` | `ClassArchetypeDifType` | `Normal` 등 |
+
+### FeatureProgressionChupaChupsVM 구조
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `Level` | `int` | |
+| `Name` | `string` | 표시 이름 (한글 가능) |
+| `IsSelection` | `bool` | 선택 가능 피처 여부 |
+| `Feature` | `UIFeature` | 피처 정보 (추가 탐색 필요) |
+
+### RefreshData 호출 시점
+
+`UnitProgressionVM.RefreshData()`는 캐릭터 정보 창 내에서 탭 또는 캐릭터를 전환할 때 호출된다 (`UnitProgressionVM.<.ctor>b__6_1` 람다 → ReactiveProperty 변경 → RefreshData).
+
+---
+
 ## 스탯 포인트 배분 (StatsDistribution)
 
 캐릭터 생성 시 25포인트 지급. 모든 스탯 기본값 10.

@@ -54,3 +54,26 @@ base.Owner.Progression.LevelUpPlanProviders.RemoveAll(...);
 
 **ToyBox에 없음.** 우리 스키마(PureBuild)는 새로운 영역.
 ToyBox는 인게임 실시간 편집 방식이며 빌드를 파일로 저장/불러오는 기능은 없다.
+
+---
+
+## Known Spells 필터링 (AppendKnownSpells)
+
+ToyBox의 `SpellsEditor` 방식을 기준으로, 영구적이지 않은 스펠은 export에서 제외한다:
+
+```csharp
+if (spell.IsTemporary
+    || spell.CopiedFromScroll
+    || spell.IsFromMythicSpellList
+    || spell.IsMysticTheurgeCombinedSpell
+    || spell.SourceItem != null)
+    continue;
+```
+
+---
+
+## AttributeIncrease — ToyBox도 레벨별 이력 미지원
+
+ToyBox는 파티 캐릭터의 현재 스탯을 표시·수정할 수 있지만, **"몇 레벨에 어떤 능력치를 올렸는가"라는 이력 정보는 표시하지 않는다**.
+
+게임 데이터에서도 `prog.Selections`나 `Facts` StatType 파라미터 방식으로는 저장되어 있지 않음이 확인됐다. UI MVVM 레이어의 `FeatProgressionVM.m_FeatureEntries`에서만 레벨 정보를 포함한 항목(lv=4,8,12,16,20)이 확인된다.

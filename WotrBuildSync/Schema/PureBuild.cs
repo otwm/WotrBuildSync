@@ -95,9 +95,9 @@ namespace WotrBuildSync.Schema
         /// BlueprintFeature GUID — 실제로 선택된 feature
         public string FeatureGuid { get; set; }
 
-        /// 파라미터가 있는 feature용 GUID (예: Weapon Focus → 무기 종류, Spell Focus → 마법 학파).
-        /// 파라미터 없으면 null.
-        public string ParameterGuid { get; set; }
+        /// 파라미터가 있는 feature용 값 (예: Weapon Focus → 무기 GUID, Spell Focus → 마법 학파 이름).
+        /// Blueprint이면 AssetGuid, enum이면 ToString() 값. 파라미터 없으면 null.
+        public string Parameter { get; set; }
     }
 
     /// <summary>
