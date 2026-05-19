@@ -1,0 +1,8 @@
+{
+  "Id": "WotrBuildSync",
+  "DisplayName": "WotrBuildSync",
+  "Author": "kimdongo",
+  "Version": "0.0.1",
+  "GameVersion": "0.0.0",
+  "EntryMethod": "WotrBuildSync.Main.Load"
+}
