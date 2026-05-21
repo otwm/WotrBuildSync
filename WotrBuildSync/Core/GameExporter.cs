@@ -13,6 +13,28 @@ namespace WotrBuildSync.Core
 {
     public static class GameExporter
     {
+        public static void LogAllFeatures(UnitEntityData unit, System.Action<string> log)
+        {
+            log($"=== [진단] {unit.CharacterName} 모든 피처 목록 시작 ===");
+    
+            // 1. Progression.Features 조사 (UI가 참조하는 곳)
+            foreach (var f in unit.Descriptor.Progression.Features)
+            {
+                log($"[Feature] Name: {f.Blueprint?.name}, Level: {f.SourceLevel}, Source: {f.Source?.Blueprint?.name}");
+            }
+
+            // 2. Facts.List 조사 (엔진 내부 데이터)
+            foreach (var fact in unit.Descriptor.Facts.List)
+            {
+                if (fact is Kingmaker.UnitLogic.Feature feature)
+                {
+                    log($"[Fact] Name: {feature.Blueprint?.name}, Level: {feature.SourceLevel}");
+                }
+            }
+    
+            log($"=== [진단] 모든 피처 목록 끝 ===");
+        }
+
 
         public static void LogDiagnostics(UnitEntityData unit, System.Action<string> log)
         {
@@ -506,4 +528,5 @@ namespace WotrBuildSync.Core
             return null;
         }
     }
+    
 }

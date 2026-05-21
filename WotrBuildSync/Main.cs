@@ -46,6 +46,7 @@ namespace WotrBuildSync
 
                 var logLines = new System.Collections.Generic.List<string>();
                 GameExporter.LogDiagnostics(unit, logLines.Add);
+                GameExporter.LogAllFeatures(unit, logLines.Add);
 
                 var logPath = Path.Combine(ModEntry.Path, "diagnostics.log");
                 File.WriteAllLines(logPath, logLines);
