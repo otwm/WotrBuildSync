@@ -46,8 +46,16 @@ namespace WotrBuildSync
 
                 var logLines = new System.Collections.Generic.List<string>();
                 GameExporter.LogDiagnostics(unit, logLines.Add);
+                GameExporter.LogLevelPlansDetailed(unit, logLines.Add);
                 GameExporter.LogAllFeatures(unit, logLines.Add);
-
+                GameExporter.DeepScan(unit, logLines.Add);
+                GameExporter.LogBasicFeatsInternal(unit, logLines.Add);
+                GameExporter.DeepDiveScan(unit, logLines.Add);
+                GameExporter.FinalHunt(unit, logLines.Add);
+                GameExporter.BruteForceHunt(unit, logLines.Add);
+                GameExporter.FinalDiagnostic(unit, logLines.Add);
+                GameExporter.BruteForceDiagnostic(unit, logLines.Add);
+                
                 var logPath = Path.Combine(ModEntry.Path, "diagnostics.log");
                 File.WriteAllLines(logPath, logLines);
                 ModEntry.Logger.Log($"진단 로그 저장: {logPath}");
