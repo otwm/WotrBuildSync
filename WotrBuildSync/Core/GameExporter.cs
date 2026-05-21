@@ -417,26 +417,58 @@ namespace WotrBuildSync.Core
         static Dictionary<int, string> BuildAttributeIncreaseMap(UnitEntityData unit)
         {
             var map = new Dictionary<int, string>();
+            var foundStats = new List<string>();
+
+            // 1. Facts에서 모든 능력치 증가 피처를 수집 (레벨 상관없이)
             foreach (var fact in unit.Descriptor.Facts.List)
             {
-                if (!(fact is Kingmaker.UnitLogic.Feature feature)) continue;
-                if (feature.Blueprint == null) continue;
-                var bpName = feature.Blueprint.name;
-                if (bpName == null) continue;
-
-                var idx = bpName.IndexOf("-attrib-", StringComparison.OrdinalIgnoreCase);
-                if (idx < 0) continue;
-
-                var statPart = bpName.Substring(idx + 8);
-                if (!AttribStatNames.Contains(statPart)) continue;
-
-                var statName = char.ToUpper(statPart[0]) + statPart.Substring(1);
-                var srcLevel = feature.SourceLevel;
-                if (srcLevel > 0 && !map.ContainsKey(srcLevel))
-                    map[srcLevel] = statName;
+                if (!(fact is Kingmaker.UnitLogic.Feature feature) || feature.Blueprint == null) continue;
+        
+                string bpName = feature.Blueprint.name;
+                // 패턴: *-attrib-strength 또는 AttributeIncreaseStrength 등
+                int idx = bpName.IndexOf("-attrib-", StringComparison.OrdinalIgnoreCase);
+                if (idx < 0) idx = bpName.IndexOf("AttributeIncrease", StringComparison.OrdinalIgnoreCase);
+        
+                if (idx >= 0)
+                {
+                    foreach (var statName in AttribStatNames)
+                    {
+                        if (bpName.IndexOf(statName, StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            string formattedStat = char.ToUpper(statName[0]) + statName.Substring(1).ToLower();
+                            // 중복 방지를 위해 SourceLevel이 있다면 키로 사용, 없다면 리스트에 보관
+                            if (feature.SourceLevel > 0 && !map.ContainsKey(feature.SourceLevel))
+                            {
+                                map[feature.SourceLevel] = formattedStat;
+                            }
+                            else
+                            {
+                                foundStats.Add(formattedStat);
+                            }
+                            break;
+                        }
+                    }
+                }
             }
+
+            // 2. 레벨 정보가 없어서 map에 못 들어간 스탯들을 4, 8, 12... 빈자리에 순서대로 채움
+            int currentTargetLevel = 4;
+            foreach (var stat in foundStats)
+            {
+                while (map.ContainsKey(currentTargetLevel) && currentTargetLevel <= 20)
+                    currentTargetLevel += 4;
+            
+                if (currentTargetLevel <= 20)
+                {
+                    map[currentTargetLevel] = stat;
+                    currentTargetLevel += 4;
+                }
+            }
+
             return map;
         }
+
+
 
         // unit의 Feature facts를 (blueprint GUID, SourceLevel) → param string 으로 인덱싱
         static Dictionary<(string guid, int level), string> BuildFeaturesByLevel(UnitEntityData unit)
