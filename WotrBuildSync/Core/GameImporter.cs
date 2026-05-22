@@ -685,6 +685,9 @@ namespace WotrBuildSync.Core
         {
             log.Log("[FullRespec] 유닛 데이터 복사 시작");
 
+            DumpDescriptorFields(target, "복사전-원본", log);
+            DumpDescriptorFields(source, "복사전-진공", log);
+
             // 이름 필드를 복사 전에 저장
             var nameField = FindCustomNameField(target.Descriptor);
             string savedName = nameField?.GetValue(target.Descriptor) as string;
@@ -736,10 +739,35 @@ namespace WotrBuildSync.Core
                 target.PostLoad();
             }
 
+            DumpDescriptorFields(target, "복사후-원본", log);
+
             // 파티 상태 진단 — 두 번째 리스펙에서 뷰가 사라지는 원인 파악용 (import-status.md Issue 4)
             DumpUnitPartyState(target, log);
 
             log.Log("[FullRespec] 유닛 데이터 복사 완료");
+        }
+
+        static void DumpDescriptorFields(UnitEntityData unit, string label, UnityModManager.ModEntry.ModLogger log)
+        {
+            try
+            {
+                var desc = unit.Descriptor;
+                var t = desc.GetType();
+                var sb = new System.Text.StringBuilder($"[DescriptorDump:{label}] 필드 목록:");
+                foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+                                               BindingFlags.Instance | BindingFlags.FlattenHierarchy))
+                {
+                    try
+                    {
+                        var val = f.GetValue(desc);
+                        var valStr = val == null ? "null" : $"({val.GetType().Name}) {val}";
+                        sb.AppendLine($"  {f.FieldType.Name} {f.Name} = {valStr}");
+                    }
+                    catch { sb.AppendLine($"  {f.FieldType.Name} {f.Name} = (err)"); }
+                }
+                log.Log(sb.ToString());
+            }
+            catch (Exception ex) { log.Log($"[DescriptorDump] 오류: {ex.Message}"); }
         }
 
         static void DumpUnitPartyState(UnitEntityData unit, UnityModManager.ModEntry.ModLogger log)

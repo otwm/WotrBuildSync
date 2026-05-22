@@ -14,295 +14,386 @@ namespace WotrBuildSync.Core
 {
     public static class GameExporter
     {
-        
         public static void BruteForceDiagnostic(UnitEntityData unit, System.Action<string> log)
-{
-    log("=== [무차별 대입] 데이터 발굴 시작 ===");
-    var prog = unit.Descriptor.Progression;
-
-    // 1. 유닛이 가진 모든 '피처(Feature)' 중 이름에 'Attribute'가 들어간 것 전수 조사
-    log("--- [1] 모든 피처 중 Attribute 검색 ---");
-    foreach (var f in prog.Features)
-    {
-        if (f.Blueprint.name.IndexOf("Attribute", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            log($"발견 피처: {f.Blueprint.name} | Level: {f.SourceLevel} | Source: {f.SourceProgression?.name ?? "null"}");
-        }
-    }
+            log("=== [무차별 대입] 데이터 발굴 시작 ===");
+            var prog = unit.Descriptor.Progression;
 
-    // 2. 유닛이 가진 모든 '진행(Progression)' 객체 조사 (리플렉션 사용)
-    log("--- [2] 모든 진행(m_Progressions) 데이터 조사 ---");
-    try {
-        var field = prog.GetType().GetField("m_Progressions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var m_Progressions = field?.GetValue(prog) as System.Collections.IDictionary;
-        if (m_Progressions != null) {
-            foreach (System.Collections.DictionaryEntry de in m_Progressions) {
-                var bp = de.Key as Kingmaker.Blueprints.SimpleBlueprint;
-                log($"진행 BP: {bp?.name}");
-                // 각 진행 BP의 레벨 엔트리 조사
-                var pBp = bp as Kingmaker.Blueprints.Classes.BlueprintProgression;
-                if (pBp != null) {
-                    foreach (var entry in pBp.LevelEntries) {
-                        log($"  -> BP Level {entry.Level}: {entry.Features.Count}개 항목");
-                        foreach (var f in entry.Features) {
-                            if (f.name.Contains("Attribute") || f.name.Contains("Selection"))
-                                log($"     - {f.name}");
-                        }
-                    }
+            // 1. 유닛이 가진 모든 '피처(Feature)' 중 이름에 'Attribute'가 들어간 것 전수 조사
+            log("--- [1] 모든 피처 중 Attribute 검색 ---");
+            foreach (var f in prog.Features)
+            {
+                if (f.Blueprint.name.IndexOf("Attribute", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    log(
+                        $"발견 피처: {f.Blueprint.name} | Level: {f.SourceLevel} | Source: {f.SourceProgression?.name ?? "null"}");
                 }
             }
-        }
-    } catch (Exception e) { log($"에러: {e.Message}"); }
 
-    // 3. Selections 데이터 재검증
-    log("--- [3] Selections 데이터 재검증 ---");
-    foreach (var kvp in prog.Selections)
-    {
-        log($"Selection Key: {kvp.Key.name}");
-        // 모든 레벨의 데이터를 다 찍어봄
-        foreach (var lv in kvp.Value.SelectionsByLevel) {
-            foreach (var feat in lv.Value) {
-                log($"  -> Level {lv.Key}: {feat?.name}");
-            }
-        }
-    }
-
-    log("=== [무차별 대입] 종료 ===");
-}
-
-        public static void FinalDiagnostic(UnitEntityData unit, System.Action<string> log)
-{
-    log("=== [진단] GetSelections 데이터 확정 스캔 시작 ===");
-    var prog = unit.Descriptor.Progression;
-    var featsProg = Kingmaker.Blueprints.Root.BlueprintRoot.Instance.Progression.FeatsProgression;
-
-    if (featsProg == null) {
-        log("FeatsProgression을 찾을 수 없습니다.");
-        return;
-    }
-
-    foreach (var entry in featsProg.LevelEntries)
-    {
-        // 4, 8, 12 레벨 집중 조사
-        if (entry.Level > 0 && entry.Level % 4 == 0)
-        {
-            log($"--- Level {entry.Level} 조사 ---");
-            foreach (var feature in entry.Features)
+            // 2. 유닛이 가진 모든 '진행(Progression)' 객체 조사 (리플렉션 사용)
+            log("--- [2] 모든 진행(m_Progressions) 데이터 조사 ---");
+            try
             {
-                if (feature is Kingmaker.Blueprints.Classes.Selection.BlueprintFeatureSelection selection)
+                var field = prog.GetType().GetField("m_Progressions",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var m_Progressions = field?.GetValue(prog) as System.Collections.IDictionary;
+                if (m_Progressions != null)
                 {
-                    log($"  [Selection] {selection.name}");
-                    
-                    // 리플렉션으로 GetSelectionsForProgession (오타 버전)과 GetSelectionsForProgression (정상 버전) 모두 시도
-                    var methods = new[] { "GetSelectionsForProgession", "GetSelectionsForProgression" };
-                    foreach (var methodName in methods)
+                    foreach (System.Collections.DictionaryEntry de in m_Progressions)
                     {
-                        try {
-                            var method = prog.GetType().GetMethod(methodName, 
-                                new Type[] { typeof(Kingmaker.Blueprints.Classes.Selection.BlueprintFeatureSelection), typeof(int), typeof(Kingmaker.Blueprints.Classes.BlueprintProgression) });
-                            
-                            if (method != null) {
-                                var result = method.Invoke(prog, new object[] { selection, entry.Level, featsProg }) as System.Collections.IEnumerable;
-                                if (result != null) {
-                                    foreach (var item in result) {
-                                        log($"    -> [{methodName}] 발견: {item}");
-                                    }
-                                } else {
-                                    log($"    -> [{methodName}] 결과가 null입니다.");
+                        var bp = de.Key as Kingmaker.Blueprints.SimpleBlueprint;
+                        log($"진행 BP: {bp?.name}");
+                        // 각 진행 BP의 레벨 엔트리 조사
+                        var pBp = bp as Kingmaker.Blueprints.Classes.BlueprintProgression;
+                        if (pBp != null)
+                        {
+                            foreach (var entry in pBp.LevelEntries)
+                            {
+                                log($"  -> BP Level {entry.Level}: {entry.Features.Count}개 항목");
+                                foreach (var f in entry.Features)
+                                {
+                                    if (f.name.Contains("Attribute") || f.name.Contains("Selection"))
+                                        log($"     - {f.name}");
                                 }
                             }
-                        } catch (Exception e) {
-                            log($"    -> [{methodName}] 호출 에러: {e.Message}");
                         }
                     }
                 }
             }
+            catch (Exception e)
+            {
+                log($"에러: {e.Message}");
+            }
+
+            // 3. Selections 데이터 재검증
+            log("--- [3] Selections 데이터 재검증 ---");
+            foreach (var kvp in prog.Selections)
+            {
+                log($"Selection Key: {kvp.Key.name}");
+                // 모든 레벨의 데이터를 다 찍어봄
+                foreach (var lv in kvp.Value.SelectionsByLevel)
+                {
+                    foreach (var feat in lv.Value)
+                    {
+                        log($"  -> Level {lv.Key}: {feat?.name}");
+                    }
+                }
+            }
+
+            log("=== [무차별 대입] 종료 ===");
         }
-    }
-    log("=== [진단] 종료 ===");
-}
+
+        public static void FinalDiagnostic(UnitEntityData unit, System.Action<string> log)
+        {
+            log("=== [진단] GetSelections 데이터 확정 스캔 시작 ===");
+            var prog = unit.Descriptor.Progression;
+            var featsProg = Kingmaker.Blueprints.Root.BlueprintRoot.Instance.Progression.FeatsProgression;
+
+            if (featsProg == null)
+            {
+                log("FeatsProgression을 찾을 수 없습니다.");
+                return;
+            }
+
+            foreach (var entry in featsProg.LevelEntries)
+            {
+                // 4, 8, 12 레벨 집중 조사
+                if (entry.Level > 0 && entry.Level % 4 == 0)
+                {
+                    log($"--- Level {entry.Level} 조사 ---");
+                    foreach (var feature in entry.Features)
+                    {
+                        if (feature is Kingmaker.Blueprints.Classes.Selection.BlueprintFeatureSelection selection)
+                        {
+                            log($"  [Selection] {selection.name}");
+
+                            // 리플렉션으로 GetSelectionsForProgession (오타 버전)과 GetSelectionsForProgression (정상 버전) 모두 시도
+                            var methods = new[] { "GetSelectionsForProgession", "GetSelectionsForProgression" };
+                            foreach (var methodName in methods)
+                            {
+                                try
+                                {
+                                    var method = prog.GetType().GetMethod(methodName,
+                                        new Type[]
+                                        {
+                                            typeof(Kingmaker.Blueprints.Classes.Selection.BlueprintFeatureSelection),
+                                            typeof(int), typeof(Kingmaker.Blueprints.Classes.BlueprintProgression)
+                                        });
+
+                                    if (method != null)
+                                    {
+                                        var result =
+                                            method.Invoke(prog, new object[] { selection, entry.Level, featsProg }) as
+                                                System.Collections.IEnumerable;
+                                        if (result != null)
+                                        {
+                                            foreach (var item in result)
+                                            {
+                                                log($"    -> [{methodName}] 발견: {item}");
+                                            }
+                                        }
+                                        else
+                                        {
+                                            log($"    -> [{methodName}] 결과가 null입니다.");
+                                        }
+                                    }
+                                }
+                                catch (Exception e)
+                                {
+                                    log($"    -> [{methodName}] 호출 에러: {e.Message}");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            log("=== [진단] 종료 ===");
+        }
 
         public static void BruteForceHunt(UnitEntityData unit, System.Action<string> log)
-{
-    log("=== [브루트 포스] 독수리 아이콘(AttributeIncrease) 정체 찾기 ===");
-    var prog = unit.Descriptor.Progression;
-    
-    // 1. m_Selections의 모든 키(Selection)를 필터링 없이 전부 출력
-    log("--- [1] 모든 Selection Key 및 데이터 전수 조사 ---");
-    var selectionsField = prog.GetType().GetField("m_Selections", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-    var selections = selectionsField?.GetValue(prog) as System.Collections.IDictionary;
-    
-    if (selections != null) {
-        foreach (System.Collections.DictionaryEntry entry in selections) {
-            var key = entry.Key as Kingmaker.Blueprints.SimpleBlueprint;
-            log($"[Selection Key] {key?.name} (GUID: {key?.AssetGuid})");
-            
-            // 해당 선택지 내부의 모든 레벨별 데이터 출력
-            var selData = entry.Value;
-            var lvField = selData.GetType().GetField("m_SelectionsByLevel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var lvDict = lvField?.GetValue(selData) as System.Collections.IDictionary;
-            if (lvDict != null) {
-                foreach (System.Collections.DictionaryEntry le in lvDict) {
-                    if (le.Value is System.Collections.IEnumerable list) {
-                        foreach (var item in list) {
-                            log($"  -> Level {le.Key}: {item}");
+        {
+            log("=== [브루트 포스] 독수리 아이콘(AttributeIncrease) 정체 찾기 ===");
+            var prog = unit.Descriptor.Progression;
+
+            // 1. m_Selections의 모든 키(Selection)를 필터링 없이 전부 출력
+            log("--- [1] 모든 Selection Key 및 데이터 전수 조사 ---");
+            var selectionsField = prog.GetType().GetField("m_Selections",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var selections = selectionsField?.GetValue(prog) as System.Collections.IDictionary;
+
+            if (selections != null)
+            {
+                foreach (System.Collections.DictionaryEntry entry in selections)
+                {
+                    var key = entry.Key as Kingmaker.Blueprints.SimpleBlueprint;
+                    log($"[Selection Key] {key?.name} (GUID: {key?.AssetGuid})");
+
+                    // 해당 선택지 내부의 모든 레벨별 데이터 출력
+                    var selData = entry.Value;
+                    var lvField = selData.GetType().GetField("m_SelectionsByLevel",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var lvDict = lvField?.GetValue(selData) as System.Collections.IDictionary;
+                    if (lvDict != null)
+                    {
+                        foreach (System.Collections.DictionaryEntry le in lvDict)
+                        {
+                            if (le.Value is System.Collections.IEnumerable list)
+                            {
+                                foreach (var item in list)
+                                {
+                                    log($"  -> Level {le.Key}: {item}");
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
-    }
 
-    // 2. unit.Descriptor.Facts (모든 특기/능력) 중 숨겨진 것까지 조사
-    log("--- [2] 모든 Facts(Features) 중 'Attribute' 포함된 것 찾기 ---");
-    foreach (var fact in unit.Descriptor.Facts.List) {
-        if (fact.Blueprint.name.IndexOf("Attribute", StringComparison.OrdinalIgnoreCase) >= 0 ||
-            fact.Blueprint.name.IndexOf("Stat", StringComparison.OrdinalIgnoreCase) >= 0) {
-            log($"[Fact 발견] Name: {fact.Blueprint.name}, Source: {fact.MaybeContext?.AssociatedBlueprint?.name ?? "null"}");
+            // 2. unit.Descriptor.Facts (모든 특기/능력) 중 숨겨진 것까지 조사
+            log("--- [2] 모든 Facts(Features) 중 'Attribute' 포함된 것 찾기 ---");
+            foreach (var fact in unit.Descriptor.Facts.List)
+            {
+                if (fact.Blueprint.name.IndexOf("Attribute", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    fact.Blueprint.name.IndexOf("Stat", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    log(
+                        $"[Fact 발견] Name: {fact.Blueprint.name}, Source: {fact.MaybeContext?.AssociatedBlueprint?.name ?? "null"}");
+                }
+            }
+
+            log("=== [브루트 포스] 종료 ===");
         }
-    }
-    
-    log("=== [브루트 포스] 종료 ===");
-}
 
 
         public static void FinalHunt(UnitEntityData unit, System.Action<string> log)
-{
-    log("=== [최종 헌트] BasicFeatsProgression 비밀 주머니 열기 ===");
-    var prog = unit.Descriptor.Progression;
-    var m_ProgressionsField = prog.GetType().GetField("m_Progressions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-    var m_Progressions = m_ProgressionsField?.GetValue(prog) as System.Collections.IDictionary;
+        {
+            log("=== [최종 헌트] BasicFeatsProgression 비밀 주머니 열기 ===");
+            var prog = unit.Descriptor.Progression;
+            var m_ProgressionsField = prog.GetType().GetField("m_Progressions",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var m_Progressions = m_ProgressionsField?.GetValue(prog) as System.Collections.IDictionary;
 
-    if (m_Progressions != null) {
-        foreach (System.Collections.DictionaryEntry de in m_Progressions) {
-            var bp = de.Key as Kingmaker.Blueprints.SimpleBlueprint;
-            if (bp != null && bp.name.Contains("BasicFeatsProgression")) {
-                log($"[대상 발견] {bp.name} 내부 전수 조사");
-                var pData = de.Value; // ProgressionData 객체
-                
-                // ProgressionData의 모든 비공개 필드를 뒤져서 '데이터가 들어있는' 필드 찾기
-                var fields = pData.GetType().GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                foreach (var f in fields) {
-                    var val = f.GetValue(pData);
-                    if (val == null) continue;
+            if (m_Progressions != null)
+            {
+                foreach (System.Collections.DictionaryEntry de in m_Progressions)
+                {
+                    var bp = de.Key as Kingmaker.Blueprints.SimpleBlueprint;
+                    if (bp != null && bp.name.Contains("BasicFeatsProgression"))
+                    {
+                        log($"[대상 발견] {bp.name} 내부 전수 조사");
+                        var pData = de.Value; // ProgressionData 객체
 
-                    // 1. 만약 딕셔너리(m_Selections 등)라면 내부 키/값 쌍을 모두 출력
-                    if (val is System.Collections.IDictionary dict) {
-                        log($"  - 필드 {f.Name} (Dictionary) 내용:");
-                        foreach (System.Collections.DictionaryEntry kvp in dict) {
-                            log($"    Key: {kvp.Key} | Value: {kvp.Value}");
-                            // Value가 FeatureSelectionData라면 그 안의 레벨별 데이터까지 추적
-                            var m_SelectionsByLevelField = kvp.Value?.GetType().GetField("m_SelectionsByLevel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                            var lvDict = m_SelectionsByLevelField?.GetValue(kvp.Value) as System.Collections.IDictionary;
-                            if (lvDict != null) {
-                                foreach (System.Collections.DictionaryEntry lvEntry in lvDict) {
-                                    log($"      -> Level {lvEntry.Key}: {lvEntry.Value}");
-                                    if (lvEntry.Value is System.Collections.IEnumerable list) {
-                                        foreach (var item in list) log($"         => Item: {item}");
+                        // ProgressionData의 모든 비공개 필드를 뒤져서 '데이터가 들어있는' 필드 찾기
+                        var fields = pData.GetType().GetFields(System.Reflection.BindingFlags.NonPublic |
+                                                               System.Reflection.BindingFlags.Instance);
+                        foreach (var f in fields)
+                        {
+                            var val = f.GetValue(pData);
+                            if (val == null) continue;
+
+                            // 1. 만약 딕셔너리(m_Selections 등)라면 내부 키/값 쌍을 모두 출력
+                            if (val is System.Collections.IDictionary dict)
+                            {
+                                log($"  - 필드 {f.Name} (Dictionary) 내용:");
+                                foreach (System.Collections.DictionaryEntry kvp in dict)
+                                {
+                                    log($"    Key: {kvp.Key} | Value: {kvp.Value}");
+                                    // Value가 FeatureSelectionData라면 그 안의 레벨별 데이터까지 추적
+                                    var m_SelectionsByLevelField = kvp.Value?.GetType().GetField("m_SelectionsByLevel",
+                                        System.Reflection.BindingFlags.NonPublic |
+                                        System.Reflection.BindingFlags.Instance);
+                                    var lvDict =
+                                        m_SelectionsByLevelField?.GetValue(kvp.Value) as System.Collections.IDictionary;
+                                    if (lvDict != null)
+                                    {
+                                        foreach (System.Collections.DictionaryEntry lvEntry in lvDict)
+                                        {
+                                            log($"      -> Level {lvEntry.Key}: {lvEntry.Value}");
+                                            if (lvEntry.Value is System.Collections.IEnumerable list)
+                                            {
+                                                foreach (var item in list) log($"         => Item: {item}");
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            // 2. 만약 리스트나 배열이라면 내용 출력
+                            else if (val is System.Collections.IEnumerable list && !(val is string))
+                            {
+                                log($"  - 필드 {f.Name} (Collection) 내용:");
+                                foreach (var item in list) log($"    Item: {item}");
+                            }
                         }
-                    }
-                    // 2. 만약 리스트나 배열이라면 내용 출력
-                    else if (val is System.Collections.IEnumerable list && !(val is string)) {
-                        log($"  - 필드 {f.Name} (Collection) 내용:");
-                        foreach (var item in list) log($"    Item: {item}");
                     }
                 }
             }
+
+            log("=== [최종 헌트] 종료 ===");
         }
-    }
-    log("=== [최종 헌트] 종료 ===");
-}
 
         public static void DeepDiveScan(UnitEntityData unit, System.Action<string> log)
-{
-    log($"=== [딥 다이브] {unit.CharacterName} 데이터 발굴 시작 ===");
-    var prog = unit.Descriptor.Progression;
-    var progType = prog.GetType();
+        {
+            log($"=== [딥 다이브] {unit.CharacterName} 데이터 발굴 시작 ===");
+            var prog = unit.Descriptor.Progression;
+            var progType = prog.GetType();
 
-    // 1. m_Progressions (진행 데이터) 전수 조사
-    log("--- [1] m_Progressions (비공개 필드) 조사 ---");
-    var m_ProgressionsField = progType.GetField("m_Progressions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-    if (m_ProgressionsField != null) {
-        var dict = m_ProgressionsField.GetValue(prog) as System.Collections.IDictionary;
-        if (dict != null) {
-            foreach (System.Collections.DictionaryEntry entry in dict) {
-                log($"Progression Key: {entry.Key}"); // 여기서 'BasicFeatsProgression' 등이 찍힙니다.
+            // 1. m_Progressions (진행 데이터) 전수 조사
+            log("--- [1] m_Progressions (비공개 필드) 조사 ---");
+            var m_ProgressionsField = progType.GetField("m_Progressions",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (m_ProgressionsField != null)
+            {
+                var dict = m_ProgressionsField.GetValue(prog) as System.Collections.IDictionary;
+                if (dict != null)
+                {
+                    foreach (System.Collections.DictionaryEntry entry in dict)
+                    {
+                        log($"Progression Key: {entry.Key}"); // 여기서 'BasicFeatsProgression' 등이 찍힙니다.
+                    }
+                }
             }
-        }
-    }
 
-    // 2. m_Selections (선택 기록) 전수 조사
-    log("--- [2] m_Selections (비공개 필드) 조사 ---");
-    var m_SelectionsField = progType.GetField("m_Selections", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-    if (m_SelectionsField != null) {
-        var dict = m_SelectionsField.GetValue(prog) as System.Collections.IDictionary;
-        if (dict != null) {
-            foreach (System.Collections.DictionaryEntry entry in dict) {
-                log($"Selection Key: {entry.Key}");
+            // 2. m_Selections (선택 기록) 전수 조사
+            log("--- [2] m_Selections (비공개 필드) 조사 ---");
+            var m_SelectionsField = progType.GetField("m_Selections",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (m_SelectionsField != null)
+            {
+                var dict = m_SelectionsField.GetValue(prog) as System.Collections.IDictionary;
+                if (dict != null)
+                {
+                    foreach (System.Collections.DictionaryEntry entry in dict)
+                    {
+                        log($"Selection Key: {entry.Key}");
+                    }
+                }
             }
-        }
-    }
 
-    // 3. 스탯 모디파이어(Modifiers)의 모든 필드 강제 출력
-    // (mod.Value 등이 에러 난다면 리플렉션으로 필드명을 직접 찾습니다)
-    log("--- [3] 스탯 보너스(Modifiers) 객체 구조 분석 ---");
-    var stats = new[] { StatType.Strength, StatType.Dexterity, StatType.Charisma };
-    foreach (var st in stats) {
-        var stat = unit.Descriptor.Stats.GetStat(st);
-        if (stat == null) continue;
-        foreach (var mod in stat.Modifiers) {
-            log($"[Stat: {st}] Mod 객체 필드 목록:");
-            var fields = mod.GetType().GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            foreach (var f in fields) {
-                try { log($"  - {f.Name}: {f.GetValue(mod)}"); } catch { }
+            // 3. 스탯 모디파이어(Modifiers)의 모든 필드 강제 출력
+            // (mod.Value 등이 에러 난다면 리플렉션으로 필드명을 직접 찾습니다)
+            log("--- [3] 스탯 보너스(Modifiers) 객체 구조 분석 ---");
+            var stats = new[] { StatType.Strength, StatType.Dexterity, StatType.Charisma };
+            foreach (var st in stats)
+            {
+                var stat = unit.Descriptor.Stats.GetStat(st);
+                if (stat == null) continue;
+                foreach (var mod in stat.Modifiers)
+                {
+                    log($"[Stat: {st}] Mod 객체 필드 목록:");
+                    var fields = mod.GetType().GetFields(System.Reflection.BindingFlags.Public |
+                                                         System.Reflection.BindingFlags.NonPublic |
+                                                         System.Reflection.BindingFlags.Instance);
+                    foreach (var f in fields)
+                    {
+                        try
+                        {
+                            log($"  - {f.Name}: {f.GetValue(mod)}");
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
             }
-        }
-    }
-    log("=== [딥 다이브] 종료 ===");
-}
 
+            log("=== [딥 다이브] 종료 ===");
+        }
 
 
         public static void LogBasicFeatsInternal(UnitEntityData unit, System.Action<string> log)
-{
-    log("=== [로그] BasicFeatsProgression 내부 데이터 발굴 시작 ===");
-    var prog = unit.Descriptor.Progression;
-    
-    try {
-        // 1. 모든 진행 데이터(m_Progressions) 딕셔너리 가져오기
-        var m_ProgressionsField = prog.GetType().GetField("m_Progressions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var m_Progressions = m_ProgressionsField?.GetValue(prog) as System.Collections.IDictionary;
+        {
+            log("=== [로그] BasicFeatsProgression 내부 데이터 발굴 시작 ===");
+            var prog = unit.Descriptor.Progression;
 
-        if (m_Progressions != null) {
-            foreach (System.Collections.DictionaryEntry de in m_Progressions) {
-                var bp = de.Key as Kingmaker.Blueprints.SimpleBlueprint;
-                // 'BasicFeatsProgression' 이름을 가진 객체 집중 조사
-                if (bp != null && bp.name.Contains("BasicFeatsProgression")) {
-                    log($"[발견] {bp.name} 객체 내부 조사 중...");
-                    var pData = de.Value; // ProgressionData
+            try
+            {
+                // 1. 모든 진행 데이터(m_Progressions) 딕셔너리 가져오기
+                var m_ProgressionsField = prog.GetType().GetField("m_Progressions",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var m_Progressions = m_ProgressionsField?.GetValue(prog) as System.Collections.IDictionary;
 
-                    // 2. ProgressionData 내부의 모든 비공개 필드 목록 출력 (m_Selections 찾기)
-                    var pFields = pData.GetType().GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    foreach (var pf in pFields) {
-                        log($"  - 필드명: {pf.Name} ({pf.FieldType.Name})");
-                        
-                        // 3. 만약 필드가 딕셔너리 형태라면 내부 키값들 출력
-                        if (pf.GetValue(pData) is System.Collections.IDictionary dict) {
-                            foreach (System.Collections.DictionaryEntry se in dict) {
-                                log($"    -> Key: {se.Key}");
-                                
-                                // 4. 선택 데이터(FeatureSelectionData) 내부의 레벨별 선택값 조사
-                                var selData = se.Value;
-                                var lvField = selData.GetType().GetField("m_SelectionsByLevel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                                var lvDict = lvField?.GetValue(selData) as System.Collections.IDictionary;
-                                if (lvDict != null) {
-                                    foreach (System.Collections.DictionaryEntry le in lvDict) {
-                                        log($"       [Level {le.Key}] 데이터 존재함");
-                                        if (le.Value is System.Collections.IEnumerable list) {
-                                            foreach (var item in list) log($"         => {item}");
+                if (m_Progressions != null)
+                {
+                    foreach (System.Collections.DictionaryEntry de in m_Progressions)
+                    {
+                        var bp = de.Key as Kingmaker.Blueprints.SimpleBlueprint;
+                        // 'BasicFeatsProgression' 이름을 가진 객체 집중 조사
+                        if (bp != null && bp.name.Contains("BasicFeatsProgression"))
+                        {
+                            log($"[발견] {bp.name} 객체 내부 조사 중...");
+                            var pData = de.Value; // ProgressionData
+
+                            // 2. ProgressionData 내부의 모든 비공개 필드 목록 출력 (m_Selections 찾기)
+                            var pFields = pData.GetType().GetFields(System.Reflection.BindingFlags.NonPublic |
+                                                                    System.Reflection.BindingFlags.Instance);
+                            foreach (var pf in pFields)
+                            {
+                                log($"  - 필드명: {pf.Name} ({pf.FieldType.Name})");
+
+                                // 3. 만약 필드가 딕셔너리 형태라면 내부 키값들 출력
+                                if (pf.GetValue(pData) is System.Collections.IDictionary dict)
+                                {
+                                    foreach (System.Collections.DictionaryEntry se in dict)
+                                    {
+                                        log($"    -> Key: {se.Key}");
+
+                                        // 4. 선택 데이터(FeatureSelectionData) 내부의 레벨별 선택값 조사
+                                        var selData = se.Value;
+                                        var lvField = selData.GetType().GetField("m_SelectionsByLevel",
+                                            System.Reflection.BindingFlags.NonPublic |
+                                            System.Reflection.BindingFlags.Instance);
+                                        var lvDict = lvField?.GetValue(selData) as System.Collections.IDictionary;
+                                        if (lvDict != null)
+                                        {
+                                            foreach (System.Collections.DictionaryEntry le in lvDict)
+                                            {
+                                                log($"       [Level {le.Key}] 데이터 존재함");
+                                                if (le.Value is System.Collections.IEnumerable list)
+                                                {
+                                                    foreach (var item in list) log($"         => {item}");
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -311,12 +402,13 @@ namespace WotrBuildSync.Core
                     }
                 }
             }
+            catch (Exception e)
+            {
+                log($"[에러] 로그 추출 중 오류: {e.Message}");
+            }
+
+            log("=== [로그] 데이터 발굴 끝 ===");
         }
-    } catch (Exception e) {
-        log($"[에러] 로그 추출 중 오류: {e.Message}");
-    }
-    log("=== [로그] 데이터 발굴 끝 ===");
-}
 
         public static void DeepScan(UnitEntityData unit, System.Action<string> log)
         {
@@ -679,6 +771,12 @@ namespace WotrBuildSync.Core
             };
         }
 
+        /// <summary>
+        /// 케릭터 타입 감지
+        /// </summary>
+        /// 
+        /// <param name="unit"></param>
+        /// <returns></returns>
         static CharacterType DetectType(UnitEntityData unit)
         {
             if (unit.IsCustomCompanion()) return CharacterType.Mercenary;
@@ -921,7 +1019,7 @@ namespace WotrBuildSync.Core
         {
             var map = new Dictionary<int, string>();
             var prog = unit.Descriptor.Progression;
-    
+
             // 1. UI가 사용하는 '특기 진행(FeatsProgression)' 블루프린트를 가져옵니다.
             var featsProg = Kingmaker.Blueprints.Root.BlueprintRoot.Instance.Progression.FeatsProgression;
             if (featsProg == null) return map;
@@ -938,19 +1036,20 @@ namespace WotrBuildSync.Core
                             // 3. UIUtilityUnit에서 확인된 함수를 호출합니다. (오타 'Progession' 주의!)
                             // 만약 컴파일 에러가 나면 GetSelectionsForProgression (s 두개)으로 시도해 보세요.
                             var selectedFeatures = prog.GetSelectionsForProgession(selection, entry.Level, featsProg);
-                    
+
                             if (selectedFeatures != null)
                             {
                                 foreach (var selected in selectedFeatures)
                                 {
                                     if (selected == null) continue;
-                            
+
                                     // 4. 피처 이름에서 스탯명을 추출합니다 (예: AttributeIncreaseCharisma)
                                     foreach (var statName in AttribStatNames)
                                     {
                                         if (selected.name.IndexOf(statName, StringComparison.OrdinalIgnoreCase) >= 0)
                                         {
-                                            map[entry.Level] = char.ToUpper(statName[0]) + statName.Substring(1).ToLower();
+                                            map[entry.Level] = char.ToUpper(statName[0]) +
+                                                               statName.Substring(1).ToLower();
                                         }
                                     }
                                 }
@@ -959,9 +1058,9 @@ namespace WotrBuildSync.Core
                     }
                 }
             }
+
             return map;
         }
-
 
 
         // unit의 Feature facts를 (blueprint GUID, SourceLevel) → param string 으로 인덱싱

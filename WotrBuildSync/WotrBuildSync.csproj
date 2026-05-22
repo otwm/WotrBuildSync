@@ -32,35 +32,41 @@
         <ErrorReport>prompt</ErrorReport>
         <WarningLevel>4</WarningLevel>
     </PropertyGroup>
+    <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+        <GameManagedDir>D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure\Wrath_Data\Managed</GameManagedDir>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+        <GameManagedDir>/Users/kimdongo/Library/Application Support/Steam/steamapps/common/Pathfinder Second Adventure/Wrath.app/Contents/Resources/Data/Managed</GameManagedDir>
+    </PropertyGroup>
     <ItemGroup>
         <Reference Include="0Harmony">
-          <HintPath>D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure\Wrath_Data\Managed\0Harmony.dll</HintPath>
+            <HintPath>$(GameManagedDir)\0Harmony.dll</HintPath>
         </Reference>
         <Reference Include="Owlcat.Runtime.UI">
-          <HintPath>D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure\Wrath_Data\Managed\Owlcat.Runtime.UI.dll</HintPath>
+            <HintPath>$(GameManagedDir)\Owlcat.Runtime.UI.dll</HintPath>
         </Reference>
         <Reference Include="System"/>
         <Reference Include="System.Core"/>
         <Reference Include="System.Data"/>
         <Reference Include="System.Xml"/>
         <Reference Include="Assembly-CSharp">
-            <HintPath>D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure\Wrath_Data\Managed\Assembly-CSharp.dll</HintPath>
+            <HintPath>$(GameManagedDir)\Assembly-CSharp.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="UnityModManager">
-            <HintPath>D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure\Wrath_Data\Managed\UnityModManager\UnityModManager.dll</HintPath>
+            <HintPath>$(GameManagedDir)\UnityModManager\UnityModManager.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="Newtonsoft.Json">
-            <HintPath>D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure\Wrath_Data\Managed\Newtonsoft.Json.dll</HintPath>
+            <HintPath>$(GameManagedDir)\Newtonsoft.Json.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="UnityEngine.CoreModule">
-            <HintPath>D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure\Wrath_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+            <HintPath>$(GameManagedDir)\UnityEngine.CoreModule.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="UnityEngine.InputLegacyModule">
-            <HintPath>D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure\Wrath_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+            <HintPath>$(GameManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
             <Private>False</Private>
         </Reference>
     </ItemGroup>
