@@ -202,6 +202,61 @@ UnitProgressionVM
 
 ---
 
+## Import 구현 (GameImporter)
+
+### Respec = 풀 리빌드
+
+`IRespecInitiateUIHandler.HandleRespecInitiate(UnitEntityData character, Action successAction)` 호출 시:
+1. 캐릭터를 레벨 0으로 완전 초기화 (클래스 레벨·피처 전부 제거)
+2. `m_LevelPlans`의 레벨 1부터 순서대로 전부 재적용
+3. Respec UI가 선택 사항 채워진 채로 열림 → 유저가 "확인" 클릭으로 완료
+4. 완료 후 `successAction` 콜백 호출
+
+→ Import 시 `m_LevelPlans`에 **현재 레벨까지 모든 레벨**이 들어있어야 함.
+
+### LevelPlanData 주입
+
+`m_LevelPlans`는 `private readonly List<LevelPlanData>` — 직접 assign 불가.  
+공개 API 사용:
+```csharp
+prog.DropLevelPlans(false);   // m_PlansForRestore에 백업 후 m_LevelPlans.Clear()
+prog.AddLevelPlan(plan);      // 레벨 순 정렬 삽입
+```
+
+### m_MythicLevelPlans 주의사항
+
+`ApplyPostLoadFixes()`가 세이브 로드 시 `m_MythicLevelPlans = null`로 초기화함.  
+런타임 신화 레벨업은 `LevelUpPlanProviders` (blueprint 기반 `AddClassLevels`) 경유.  
+Import 시 신화 플랜을 주입하려면 리플렉션으로 `m_MythicLevelPlans`와 `m_MythicLevelPlanDisabled = false` 직접 설정 필요.
+
+### SelectFeature 생성 (리플렉션 방식)
+
+생성자가 `FeatureSelectionState`(런타임 상태 객체) 요구 → 직접 호출 불가.  
+`new SelectFeature()` (JsonConstructor) + 리플렉션으로 private readonly 필드 주입 후 `PostLoad()` 호출:
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `Selection` | `IFeatureSelection` | `BlueprintFeatureSelection` BP |
+| `SelectionIndex` | `int` | 같은 레벨 내 슬롯 인덱스 |
+| `m_ItemFeature` | `BlueprintFeature` | 선택할 피처 BP |
+| `m_ItemParam` | `object` | `FeatureParam` 또는 null |
+
+`PostLoad()`가 `Selection.Items.FirstOrDefault(i => i.Feature == m_ItemFeature && Equals(i.Param, m_ItemParam))`로 `Item` 프로퍼티 재구성.
+
+파라미터 없는 피처(대부분의 피트)는 `m_ItemParam = null`.  
+파라미터드 피처(Weapon Focus 등)는 `FeatureParam` 객체 필요 — 생성자 미확인.
+
+### 스펠 처리 (Import)
+
+Export와 동일하게 스펠은 `LevelPlanData`에 **포함하지 않음**.  
+respec 완료 후 `successAction` 콜백에서 스펠북에 직접 추가:
+```
+respec 트리거(successAction 지정) → 완료 콜백 → Spellbook.AddKnownSpell 직접 호출
+```
+레벨 분배 문제 없이 최종 스펠 목록을 그대로 복원. ToyBox SpellsEditor와 동일한 방식.
+
+---
+
 ## 스탯 포인트 배분 (StatsDistribution)
 
 캐릭터 생성 시 25포인트 지급. 모든 스탯 기본값 10.

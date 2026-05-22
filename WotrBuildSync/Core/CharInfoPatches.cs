@@ -3,6 +3,10 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using HarmonyLib;
+using Kingmaker.Blueprints.Classes;
+using Kingmaker.UnitLogic;
+using Kingmaker.UnitLogic.Class.LevelUp;
+using Kingmaker.UnitLogic.Class.LevelUp.Actions;
 
 namespace WotrBuildSync.Core
 {
@@ -13,9 +17,226 @@ namespace WotrBuildSync.Core
             PatchLevelProgressionEntryVMCtor(harmony);
             PatchLevelProgressionEntryView(harmony);
             PatchUnitProgressionVM(harmony);
+            PatchGetNextLevelPlan(harmony);
+            PatchSelectClassCheck(harmony);
+            PatchSelectClassApply(harmony);
+            PatchApplyClassMechanics(harmony);
         }
 
-        // ── UnitProgressionVM.RefreshData ───────────────────────────────────
+        // ── GetNextLevelPlan 패치 (신화 레벨업 플랜 오버라이드) ───────────────
+        // FullRespec의 신화 레벨 적용 시 LevelUpPlanProviders가 비어 있어도
+        // 우리가 직접 빌드한 LevelPlanData를 반환하도록 한다.
+        internal static LevelPlanData GetNextLevelPlanOverride;
+
+        static void PatchGetNextLevelPlan(Harmony harmony)
+        {
+            try
+            {
+                var method = typeof(UnitProgressionData).GetMethod(
+                    "GetNextLevelPlan",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    null, new[] { typeof(bool) }, null);
+                if (method == null)
+                {
+                    Main.ModEntry.Logger.Warning("[Hook] UnitProgressionData.GetNextLevelPlan 없음");
+                    return;
+                }
+                harmony.Patch(method, prefix: new HarmonyMethod(
+                    typeof(CharInfoPatches), nameof(GetNextLevelPlan_Prefix)));
+                Main.ModEntry.Logger.Log("[Hook] 패치: UnitProgressionData.GetNextLevelPlan");
+            }
+            catch (Exception ex)
+            {
+                Main.ModEntry.Logger.Error($"[Hook] GetNextLevelPlan 패치 실패: {ex.Message}");
+            }
+        }
+
+        static bool GetNextLevelPlan_Prefix(bool mythic, ref LevelPlanData __result)
+        {
+            if (mythic && GetNextLevelPlanOverride != null)
+            {
+                var stack = new System.Diagnostics.StackTrace(skipFrames: 1, fNeedFileInfo: false);
+                var frames = stack.GetFrames() ?? Array.Empty<System.Diagnostics.StackFrame>();
+                var caller = string.Join(" → ", frames.Take(6)
+                    .Select(f => f.GetMethod())
+                    .Where(m => m != null)
+                    .Select(m => $"{m.DeclaringType?.Name}.{m.Name}"));
+                Main.ModEntry.Logger.Log($"[Hook] GetNextLevelPlan override 주입 — actions={GetNextLevelPlanOverride.Actions?.Length} | {caller}");
+                __result = GetNextLevelPlanOverride;
+                return false;
+            }
+            return true;
+        }
+
+        // ── SelectClass.Check 패치 (클래스 선택 제한 우회) ──────────────────
+        // SelectClass.Check(state)가 false를 반환하면 Execute가 조용히 리턴.
+        // BypassMythicClassCheck 동안에만 강제로 true 반환.
+        internal static bool BypassMythicClassCheck = false;
+
+        // ILevelUpAction.Check(LevelUpState, UnitDescriptor) 패치
+        static void PatchSelectClassCheck(Harmony harmony)
+        {
+            try
+            {
+                // UnitDescriptor 타입을 컴파일 타임에 참조할 수 없으므로 런타임에 파라미터 수/타입으로 탐색
+                var method = typeof(SelectClass).GetMethods(
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .FirstOrDefault(m =>
+                        (m.Name == "Check" || m.Name.EndsWith(".Check")) &&
+                        m.GetParameters().Length == 2 &&
+                        m.GetParameters()[0].ParameterType == typeof(LevelUpState));
+                if (method == null)
+                {
+                    Main.ModEntry.Logger.Warning("[Hook] SelectClass.Check(LevelUpState, UnitDescriptor) 없음");
+                    return;
+                }
+                harmony.Patch(method, prefix: new HarmonyMethod(
+                    typeof(CharInfoPatches), nameof(SelectClassCheck_Prefix)));
+                Main.ModEntry.Logger.Log("[Hook] 패치: SelectClass.Check");
+            }
+            catch (Exception ex)
+            {
+                Main.ModEntry.Logger.Error($"[Hook] SelectClass.Check 패치 실패: {ex.Message}");
+            }
+        }
+
+        static bool SelectClassCheck_Prefix(ref bool __result)
+        {
+            if (BypassMythicClassCheck)
+            {
+                __result = true;
+                return false;
+            }
+            return true;
+        }
+
+        // ── SelectClass.Apply 진단 패치 (BypassMythicClassCheck 활성 시에만 로그 출력) ──
+        // 신화 레벨업 시 SelectClass.Apply가 실제로 호출되는지, SelectedClass가 올바른지 확인용.
+        // 진단이 완료되면 PatchSelectClassApply 호출 제거 가능.
+        static void PatchSelectClassApply(Harmony harmony)
+        {
+            try
+            {
+                var method = typeof(SelectClass).GetMethods(
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .FirstOrDefault(m =>
+                        (m.Name == "Apply" || m.Name.EndsWith(".Apply")) &&
+                        m.GetParameters().Length == 2 &&
+                        m.GetParameters()[0].ParameterType == typeof(LevelUpState));
+                if (method == null)
+                {
+                    Main.ModEntry.Logger.Warning("[Hook] SelectClass.Apply(LevelUpState, UnitDescriptor) 없음");
+                    return;
+                }
+                harmony.Patch(method,
+                    prefix: new HarmonyMethod(typeof(CharInfoPatches), nameof(SelectClassApply_Prefix)),
+                    postfix: new HarmonyMethod(typeof(CharInfoPatches), nameof(SelectClassApply_Postfix)));
+                Main.ModEntry.Logger.Log("[Hook] 패치: SelectClass.Apply");
+            }
+            catch (Exception ex)
+            {
+                Main.ModEntry.Logger.Error($"[Hook] SelectClass.Apply 패치 실패: {ex.Message}");
+            }
+        }
+
+        static void SelectClassApply_Prefix(object __instance, LevelUpState state)
+        {
+            if (!BypassMythicClassCheck) return;
+            try
+            {
+                var classBp = __instance.GetType()
+                    .GetProperty("CharacterClass", BindingFlags.Public | BindingFlags.Instance)
+                    ?.GetValue(__instance);
+                Main.ModEntry.Logger.Log(
+                    $"[Diag] SelectClass.Apply 진입: class={classBp} mode={state.Mode} " +
+                    $"IsClassSelected={state.IsClassSelected} IsMythicClassSelected={state.IsMythicClassSelected}");
+            }
+            catch (Exception ex) { Main.ModEntry.Logger.Log($"[Diag] SelectClass.Apply prefix err: {ex.Message}"); }
+        }
+
+        static void SelectClassApply_Postfix(LevelUpState state, object unit)
+        {
+            if (!BypassMythicClassCheck) return;
+            try
+            {
+                var prog = GetField(unit, "Progression");
+                var mythicLv = GetField(prog, "MythicLevel");
+                var charLv   = GetField(prog, "CharacterLevel");
+                Main.ModEntry.Logger.Log(
+                    $"[Diag] SelectClass.Apply 완료: IsClassSelected={state.IsClassSelected} " +
+                    $"IsMythicClassSelected={state.IsMythicClassSelected} SelectedClass={state.SelectedClass?.name} " +
+                    $"MythicLv={mythicLv} CharLv={charLv}");
+            }
+            catch (Exception ex) { Main.ModEntry.Logger.Log($"[Diag] SelectClass.Apply postfix err: {ex.Message}"); }
+        }
+
+        // ── ApplyClassMechanics.Apply(LevelUpState, UnitDescriptor) 진단 패치 ─
+        static void PatchApplyClassMechanics(Harmony harmony)
+        {
+            try
+            {
+                var method = typeof(ApplyClassMechanics).GetMethods(
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .FirstOrDefault(m =>
+                        m.Name == "Apply" &&
+                        m.GetParameters().Length == 2 &&
+                        m.GetParameters()[0].ParameterType == typeof(LevelUpState));
+                if (method == null)
+                {
+                    Main.ModEntry.Logger.Warning("[Hook] ApplyClassMechanics.Apply(LevelUpState, UnitDescriptor) 없음");
+                    return;
+                }
+                harmony.Patch(method,
+                    prefix: new HarmonyMethod(typeof(CharInfoPatches), nameof(ApplyClassMechanics_Prefix)),
+                    postfix: new HarmonyMethod(typeof(CharInfoPatches), nameof(ApplyClassMechanics_Postfix)));
+                Main.ModEntry.Logger.Log("[Hook] 패치: ApplyClassMechanics.Apply");
+            }
+            catch (Exception ex)
+            {
+                Main.ModEntry.Logger.Error($"[Hook] ApplyClassMechanics.Apply 패치 실패: {ex.Message}");
+            }
+        }
+
+        static void ApplyClassMechanics_Prefix(LevelUpState state, object unit)
+        {
+            if (!BypassMythicClassCheck) return;
+            try
+            {
+                var prog     = GetField(unit, "Progression");
+                var mythicLv = GetField(prog, "MythicLevel");
+                var charLv   = GetField(prog, "CharacterLevel");
+                var sb = new StringBuilder("[Diag] ApplyClassMechanics.Apply 진입:");
+                sb.AppendLine($"  SelectedClass={state.SelectedClass?.name}");
+                sb.AppendLine($"  NextObligatoryMythicClass={state.NextObligatoryMythicClass?.name}");
+                sb.AppendLine($"  IsClassSelected={state.IsClassSelected}");
+                sb.AppendLine($"  IsMythicClassSelected={state.IsMythicClassSelected}");
+                sb.AppendLine($"  Mode={state.Mode}");
+                sb.AppendLine($"  NextClassLevel={state.NextClassLevel}");
+                if (prog != null)
+                    sb.AppendLine($"  Unit MythicLv={mythicLv} CharLv={charLv}");
+                Main.ModEntry.Logger.Log(sb.ToString());
+            }
+            catch (Exception ex) { Main.ModEntry.Logger.Log($"[Diag] ACM prefix err: {ex.Message}"); }
+        }
+
+        static void ApplyClassMechanics_Postfix(object unit)
+        {
+            if (!BypassMythicClassCheck) return;
+            try
+            {
+                var prog     = GetField(unit, "Progression");
+                var mythicLv = GetField(prog, "MythicLevel");
+                var charLv   = GetField(prog, "CharacterLevel");
+                Main.ModEntry.Logger.Log(prog != null
+                    ? $"[Diag] ApplyClassMechanics.Apply 종료: MythicLv={mythicLv} CharLv={charLv}"
+                    : "[Diag] ApplyClassMechanics.Apply 종료: unit=null");
+            }
+            catch (Exception ex) { Main.ModEntry.Logger.Log($"[Diag] ACM postfix err: {ex.Message}"); }
+        }
+
+        // ── UnitProgressionVM.RefreshData 진단 패치 ─────────────────────────
+        // 캐릭터 창에서 클래스/피처 진행표가 갱신될 때마다 방대한 필드 덤프를 출력.
+        // 신화 선택이 UI에 반영되는지 확인하는 용도 — 조사 완료 후 제거 가능.
         static void PatchUnitProgressionVM(Harmony harmony)
         {
             var vmType = FindType("UnitProgressionVM");
@@ -189,7 +410,9 @@ namespace WotrBuildSync.Core
             try { return f?.GetValue(obj); } catch { return null; }
         }
 
-        // ── LevelProgressionEntryVM 생성자 ──────────────────────────────────
+        // ── LevelProgressionEntryVM 생성자 진단 패치 ────────────────────────
+        // 레벨 진행표 VM이 생성될 때마다 index/currentLevel을 로그에 출력.
+        // 신화 레벨 적용 후 VM이 올바른 레벨을 읽는지 확인용 — 조사 완료 후 제거 가능.
         static void PatchLevelProgressionEntryVMCtor(Harmony harmony)
         {
             var vmType = FindType("LevelProgressionEntryVM");
@@ -243,7 +466,9 @@ namespace WotrBuildSync.Core
             }
         }
 
-        // ── LevelProgressionEntryView.BindViewImplementation ───────────────
+        // ── LevelProgressionEntryView.BindViewImplementation 진단 패치 ──────
+        // UI View가 ViewModel에 바인딩될 때 Index/IsAvailable/IsSelected 등을 로그에 출력.
+        // 신화 선택 UI 불반영 원인 분석용 — 조사 완료 후 제거 가능.
         static void PatchLevelProgressionEntryView(Harmony harmony)
         {
             var viewType = FindType("LevelProgressionEntryView");

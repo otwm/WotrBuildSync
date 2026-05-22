@@ -30,6 +30,18 @@ namespace WotrBuildSync
             {
                 TryExport();
             }
+
+            // Ctrl+Shift+I → mod 폴더의 import.json Import
+            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.I))
+            {
+                TryImport();
+            }
+
+            // Ctrl+Shift+R → mod 폴더의 import.json Full Respec
+            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.R))
+            {
+                TryImportFull();
+            }
         }
 
         static void TryExport()
@@ -73,6 +85,63 @@ namespace WotrBuildSync
             catch (Exception ex)
             {
                 ModEntry.Logger.Error($"Export 실패: {ex}");
+            }
+        }
+        static void TryImport()
+        {
+            try
+            {
+                var player = Game.Instance?.Player;
+                var unit = player?.MainCharacter.Value;
+                if (unit == null)
+                {
+                    ModEntry.Logger.Warning("MainCharacter is null — 세이브 로드 후 시도하세요.");
+                    return;
+                }
+
+                var path = Path.Combine(ModEntry.Path, "import.json");
+                if (!File.Exists(path))
+                {
+                    ModEntry.Logger.Warning($"import.json 없음: {path}");
+                    return;
+                }
+
+                ModEntry.Logger.Log($"Import 시작: {path}");
+                GameImporter.Import(unit, path);
+                ModEntry.Logger.Log("Import 완료");
+            }
+            catch (Exception ex)
+            {
+                ModEntry.Logger.Error($"Import 실패: {ex}");
+            }
+        }
+
+        static void TryImportFull()
+        {
+            try
+            {
+                var player = Game.Instance?.Player;
+                var unit = player?.MainCharacter.Value;
+                if (unit == null)
+                {
+                    ModEntry.Logger.Warning("MainCharacter is null — 세이브 로드 후 시도하세요.");
+                    return;
+                }
+
+                var path = Path.Combine(ModEntry.Path, "import.json");
+                if (!File.Exists(path))
+                {
+                    ModEntry.Logger.Warning($"import.json 없음: {path}");
+                    return;
+                }
+
+                ModEntry.Logger.Log($"Full Respec 시작: {path}");
+                GameImporter.ImportFull(unit, path);
+                ModEntry.Logger.Log("Full Respec 완료");
+            }
+            catch (Exception ex)
+            {
+                ModEntry.Logger.Error($"Full Respec 실패: {ex}");
             }
         }
     }
